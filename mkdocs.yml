@@ -63,7 +63,7 @@ markdown_extensions:
       auto_level: 0
 
 plugins:
-  - search
+  # - search
   - glightbox
   - swagger-ui-tag
   - section-index
