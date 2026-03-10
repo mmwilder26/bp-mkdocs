@@ -1,5 +1,7 @@
 site_name: Butter
 site_url: https://sitename.example
+repo_url: https://github.com/mmwilder26/bp-mkdocs
+edit_uri: edit/main/docs
 theme:
   name: material
   features:
@@ -7,6 +9,7 @@ theme:
     - content.code.copy
     - navigation.path
     - navigation.indexes
+    - content.action.edit
     # - navigation.sections
   favicon: assets/butter_faviconV2.png
   logo: assets/butterlogo.png
