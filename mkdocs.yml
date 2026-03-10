@@ -10,6 +10,7 @@ theme:
     - navigation.path
     - navigation.indexes
     - content.action.edit
+    - content.action.view
     # - navigation.sections
   favicon: assets/butter_faviconV2.png
   logo: assets/butterlogo.png
