@@ -64,7 +64,7 @@ markdown_extensions:
 
 plugins:
   - search
-  # - glightbox
+  - glightbox
   - swagger-ui-tag
   - section-index
   # - table-reader
