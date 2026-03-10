@@ -1,0 +1,200 @@
+openapi: 3.0.3
+
+info:
+  title: Butter Payment Method Update API
+  version: 1.0.0
+  description: |
+    ## Overview
+    This endpoint is used by the merchant to notify Recover of an update to a payment
+    method for a customer.
+
+    Whenever a payment method has been **updated, added, or removed** for any reason,
+    that event should be forwarded to this endpoint so that it can be used as a signal
+    to increase Recover's performance.
+
+    ## Authentication
+    All requests require an API key passed as a header:
+    ```
+    x-api-key: <your_api_key>
+    ```
+
+servers:
+  - url: https://api.butterpayments.com/recover
+    description: Production
+
+security:
+  - apiKeyAuth: []
+
+tags:
+  - name: Payment Method Updates
+    description: Notify Recover of payment method changes
+
+paths:
+  /payment_method_updates:
+    post:
+      tags: [Payment Method Updates]
+      summary: Notify Recover of a payment method update
+      description: |
+        Sends a payment method update event to Recover. This should be called whenever
+        a payment method is added, updated, or removed for a customer — regardless of
+        the reason — so Recover can use it as a performance signal.
+
+        > **Note:** Either `customer_id` or `psp_customer_id` must be populated.
+      operationId: submitPaymentMethodUpdate
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PaymentMethodUpdateRequest"
+            examples:
+              minimal:
+                summary: Minimal required fields
+                value:
+                  customer_id: "11223344"
+                  payment_method_id: "pm_12345"
+              with_reason:
+                summary: With optional reason
+                value:
+                  customer_id: "11223344"
+                  payment_method_id: "pm_12345"
+                  reason: "user_updated"
+              with_psp_customer:
+                summary: Using PSP customer ID instead
+                value:
+                  psp_customer_id: "cus_12345"
+                  payment_method_id: "pm_12345"
+                  reason: "network_updated"
+      responses:
+        "200":
+          $ref: "#/components/responses/Success"
+        "400":
+          $ref: "#/components/responses/ValidationError"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "415":
+          $ref: "#/components/responses/UnsupportedMediaType"
+        "500":
+          $ref: "#/components/responses/ServerError"
+
+components:
+  securitySchemes:
+    apiKeyAuth:
+      type: apiKey
+      in: header
+      name: x-api-key
+      description: API key to authorize requests.
+
+  schemas:
+    PaymentMethodUpdateRequest:
+      type: object
+      required:
+        - payment_method_id
+      description: |
+        Payment method update event payload. Either `customer_id` or `psp_customer_id`
+        must be provided.
+      properties:
+        customer_id:
+          type: string
+          description: |
+            The internal identifier from your subscription management platform used to
+            designate the customer. Either `customer_id` or `psp_customer_id` must be populated.
+          example: "11223344"
+        psp_customer_id:
+          type: string
+          description: |
+            The identifier used by the Payment Processor to designate the customer.
+            Either `customer_id` or `psp_customer_id` must be populated.
+          example: "cus_12345"
+        payment_method_id:
+          type: string
+          description: The ID from the PSP representing the payment method.
+          example: "pm_12345"
+        reason:
+          type: string
+          enum:
+            - user_added
+            - user_removed
+            - user_updated
+            - network_updated
+          description: The action that led to this payment method update event.
+          example: "user_updated"
+
+    ErrorResponse:
+      type: object
+      properties:
+        message:
+          type: string
+        errors:
+          oneOf:
+            - type: string
+            - type: array
+              items:
+                type: object
+
+  responses:
+    Success:
+      description: Request Successful
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              message:
+                type: string
+                example: "Request submitted for processing"
+              request_id:
+                type: string
+                example: "2c941653-b229-4528-b576-70fcfd388543:49645839701979566120793328447151049151317978254208401410:000000000000"
+          example:
+            message: "Request submitted for processing"
+            request_id: "2c941653-b229-4528-b576-70fcfd388543:49645839701979566120793328447151049151317978254208401410:000000000000"
+
+    ValidationError:
+      description: Request Failed Validation
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+          example:
+            message: "Invalid request body"
+            errors:
+              - "('payment_method_id',)": "Field required"
+
+    Forbidden:
+      description: Invalid API Key
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+          example:
+            message: "Forbidden"
+            errors: "Invalid API Key"
+
+    NotFound:
+      description: Method/Path Not Found
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+          example:
+            message: "Method/Path combination not found."
+
+    UnsupportedMediaType:
+      description: Unsupported Media Type
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+          example:
+            message: "Unsupported Media Type"
+            errors: "Content-Type must be application/json"
+
+    ServerError:
+      description: Server Error
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"

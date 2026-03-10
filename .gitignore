@@ -1,0 +1,46 @@
+# MKDocs documentation build artifacts
+site/
+
+# Material for MKDocs cache folder (if caching is enabled)
+.cache/
+
+# Python virtual environment (if used)
+venv/
+ENV/
+
+# C extensions
+*.so
+
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Distrubition / packaging
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+*.egg-info/
+
+# OS and IDE-specific files (optional but recommended)
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db
+
+# Scrapy stuff:
+.scrapy
+
+# Flask stuff:
+instance/
+.webassets-cache
+
+# Sphinx documentation
+docs/_build/
+
+# PyBuilder
+target/

@@ -1,0 +1,278 @@
+openapi: 3.0.3
+
+info:
+  title: Butter Retry Status API
+  version: 1.0.0
+  description: |
+    ## Overview
+    This endpoint is provisioned on the **merchant's servers** for Recover to retrieve
+    invoice retry information. It serves as a final check to make sure that Recover is
+    able to attempt a payment before executing.
+
+    Recover calls this endpoint — it is **not** called by the merchant.
+
+    ## Authentication
+    Butter supports two auth methods for this endpoint. Provide credentials to Butter
+    during onboarding.
+
+    **Basic Auth:**
+    ```
+    Authorization: Basic <base64(username:password)>
+    ```
+
+    **API Key:**
+    ```
+    x-api-key: <your_api_key>
+    ```
+
+servers:
+  - url: https://api.<merchant-url>.com
+    description: Merchant-hosted server (replace with your actual domain)
+
+security:
+  - basicAuth: []
+  - apiKeyAuth: []
+
+tags:
+  - name: Retry Status
+    description: Merchant-hosted endpoint for Recover to check retry eligibility
+
+paths:
+  /retry/{invoice_id}:
+    post:
+      tags: [Retry Status]
+      summary: Check retry status for an invoice
+      description: |
+        Called by Recover before attempting a payment retry. Returns whether the invoice
+        should be retried, the reason, and optionally the payment methods and amount to use.
+      operationId: getRetryStatus
+      parameters:
+        - name: invoice_id
+          in: path
+          required: true
+          description: The ID of an invoice within your subscription management system.
+          schema:
+            type: string
+            example: "inv_12345"
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RetryStatusRequest"
+            example:
+              custom:
+                brand: "Pepsi"
+      responses:
+        "200":
+          description: The request succeeded
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RetryStatusResponse"
+              examples:
+                retry_blocked:
+                  summary: Do not retry — user cancelled
+                  value:
+                    retry: false
+                    reason: "User Cancelation"
+                retry_allowed:
+                  summary: Retry allowed with payment method
+                  value:
+                    retry: true
+                    reason: "User Recovered via Payment Method Update"
+                    amount: 19.99
+                    metadata: {}
+                    payment_methods:
+                      - id: "pm_12345"
+                        network_transaction_id: "QKSX6RP250903"
+                        bin: "621035"
+                        token:
+                          id: "4457010000000009"
+                          expiration_month: "02"
+                          expiration_year: "27"
+                          card_validation_number: "445"
+                        billing_address:
+                          name: "John Smith"
+                          city: "Boston"
+                          state: "MA"
+                          zip: "02108"
+                          phone: "555-309-9999"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/ServerError"
+
+components:
+  securitySchemes:
+    basicAuth:
+      type: http
+      scheme: basic
+      description: Basic auth credentials you (the merchant) provide to Butter to authorize webhook requests.
+    apiKeyAuth:
+      type: apiKey
+      in: header
+      name: x-api-key
+      description: API key credentials you (the merchant) provide to Butter to authorize requests to the Retry API.
+
+  schemas:
+    RetryStatusRequest:
+      type: object
+      properties:
+        custom:
+          type: object
+          description: |
+            Any custom fields passed to the Get Payment Information endpoint of the
+            Recover Enterprise API will be included in this request.
+          additionalProperties: true
+          example:
+            brand: "Pepsi"
+
+    RetryStatusResponse:
+      type: object
+      required:
+        - retry
+        - reason
+      properties:
+        retry:
+          type: boolean
+          description: Should Butter retry this invoice?
+          example: false
+        reason:
+          type: string
+          description: |
+            The reason for the retry decision. Common values include:
+
+            - `User Cancelation`
+            - `Dunning Window Reached`
+            - `User Recovered via Payment Method Update`
+            - `User Outstanding Invoice Forgiven`
+            - `Other` (work with Butter to determine additional reasons)
+          example: "User Cancelation"
+        amount:
+          type: number
+          format: float
+          description: The amount to attempt a retry for.
+          example: 19.99
+        metadata:
+          type: object
+          description: Any metadata not passed into the initial /payments request that should be added to the PSP retry request.
+          additionalProperties: true
+        payment_methods:
+          type: array
+          description: The payment methods that can be used for a retry.
+          items:
+            $ref: "#/components/schemas/PaymentMethod"
+
+    PaymentMethod:
+      type: object
+      properties:
+        id:
+          type: string
+          description: The ID of the payment method from the PSP.
+          example: "pm_12345"
+        network_transaction_id:
+          type: string
+          description: The original transaction ID recorded with the network from the first success on this payment method.
+          example: "QKSX6RP250903"
+        bin:
+          type: string
+          description: The first four to six numbers on a payment card that identifies the financial institution that issued the card.
+          example: "621035"
+        token:
+          $ref: "#/components/schemas/Token"
+        billing_address:
+          $ref: "#/components/schemas/BillingAddress"
+
+    Token:
+      type: object
+      description: The details of the token a retry should be attempted for.
+      properties:
+        id:
+          type: string
+          description: The ID of the token from the payment service provider.
+          example: "4457010000000009"
+        expiration_month:
+          type: string
+          description: The 2-digit month the underlying card will expire in.
+          example: "02"
+        expiration_year:
+          type: string
+          description: The 2-digit year the underlying card will expire in.
+          example: "27"
+        card_validation_number:
+          type: string
+          description: The CVV of the underlying card. If using Worldpay, you can pass `000` to use the stored value in the token.
+          example: "445"
+
+    BillingAddress:
+      type: object
+      description: The billing address associated with the payment method.
+      properties:
+        name:
+          type: string
+          description: The full name of the person associated with the billing address.
+          example: "John Smith"
+        city:
+          type: string
+          description: The city associated with the billing address.
+          example: "Boston"
+        state:
+          type: string
+          description: The 2-character code for the state associated with the billing address.
+          example: "MA"
+        zip:
+          type: string
+          description: The 5-digit zip code associated with the billing address.
+          example: "02108"
+        phone:
+          type: string
+          description: The phone number associated with the billing address.
+          example: "555-309-9999"
+
+    DetailError:
+      type: object
+      properties:
+        detail:
+          type: string
+
+  responses:
+    Unauthorized:
+      description: Invalid Credentials
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/DetailError"
+          example:
+            detail: "Missing or invalid api key"
+
+    NotFound:
+      description: Invoice Not Found
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/DetailError"
+          example:
+            detail: "An invoice with the provided ID cannot be found"
+
+    TooManyRequests:
+      description: Too Many Requests
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/DetailError"
+          example:
+            detail: "Requests have exceeded rate limiting"
+
+    ServerError:
+      description: Server Error
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/DetailError"
+          example:
+            detail: "A server error has occurred"

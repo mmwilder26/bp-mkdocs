@@ -1,0 +1,1 @@
+<swagger-ui src="/openapi/payment-method-update.yaml"/>

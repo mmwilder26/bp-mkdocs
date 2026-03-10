@@ -1,0 +1,74 @@
+site_name: Butter
+site_url: https://sitename.example
+theme:
+  name: material
+  features:
+    - navigation.footer
+    - content.code.copy
+    - navigation.path
+    - navigation.indexes
+    # - navigation.sections
+  favicon: assets/butter_faviconV2.png
+  logo: assets/butterlogo.png
+  font:
+    text: Roboto
+  palette: 
+    # Dark Mode
+    - scheme: slate
+      toggle:
+        icon: material/weather-sunny
+        name: Dark mode
+      primary: black
+      accent: blue
+    
+    # Light Mode
+    - scheme: default
+      toggle:
+        icon: material/weather-night
+        name: Light mode
+      primary: white
+      accent: blue
+
+nav:
+  - Recover: 'Recover.md'
+  - API Reference: 
+    - 'API Reference/index.md'
+    - Authentication: 'Authentication.md'
+    - Resources:
+      - Recover Payment Object Properties: 'Recover Payment Object Properties.md'
+      - Webhook Signature Verification: 'Webhook Signature Verification.md'
+    - Recover Enterprise API:
+      - POST Payments: 'Payments.md'
+      - POST Payment Method Update: 'Payment Method Update.md'
+    - Merchant Endpoints:
+      - POST Retry Status: 'Retry Status.md'
+      - POST Retry Results: 'Retry Results.md'
+      - POST End of Dunning: 'End of Dunning.md'
+
+markdown_extensions:
+  - admonition
+  - pymdownx.details
+  - pymdownx.superfences
+  - attr_list
+  - md_in_html
+  - pymdownx.highlight:
+      anchor_linenums: true
+      line_spans: __span
+      pygments_lang_class: true
+  - pymdownx.inlinehilite
+  - pymdownx.snippets
+  - pymdownx.blocks.caption:
+      prepend: false
+      auto: true
+      auto_level: 0
+
+plugins:
+  - glightbox
+  - swagger-ui-tag
+  - section-index
+  # - table-reader
+  # - openapi-docs:
+  #     config:
+  #       openapi.yaml:
+  #         output_dir: docs/api
+  #         template: material

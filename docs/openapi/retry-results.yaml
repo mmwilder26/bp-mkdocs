@@ -1,0 +1,281 @@
+openapi: 3.0.3
+
+info:
+  title: Butter Retry Results Webhook
+  version: 1.0.0
+  description: |
+    ## Overview
+    Butter sends webhooks via HTTP POST requests to this endpoint each time a payment
+    recovery is attempted, with the results of the retry attempt.
+
+    This endpoint is **provisioned on the merchant's servers**. Butter calls it — the
+    merchant does not initiate these requests.
+
+    > **Note:** The Butter webhook payload is a flat JSON object. The payload does not
+    > contain a higher-level `body` wrapper around the attributes.
+
+    ## Delivery Guarantee
+    Butter guarantees **at-least-once** delivery of events. Use the
+    `X-Butter-Webhook-Deduplication-ID` header to detect and safely discard duplicate
+    deliveries. On failure, webhooks retry every 12 hours for 7 days.
+
+    ## Authentication
+    Provide credentials to Butter during onboarding. Butter will include them on every
+    webhook request to your endpoint.
+
+    **Basic Auth:**
+    ```
+    Authorization: Basic <base64(username:password)>
+    ```
+
+    **API Key:**
+    ```
+    x-api-key: <your_api_key>
+    ```
+
+    ## Webhook Signature Verification
+    Validate the `X-Butter-Webhook-Signature` HMAC header to confirm the request
+    originated from Butter. Check `X-Butter-Webhook-Expiration` to reject expired
+    requests.
+
+servers:
+  - url: https://api.<merchant-url>.com
+    description: Merchant-hosted server (replace with your actual domain)
+
+security:
+  - basicAuth: []
+  - apiKeyAuth: []
+
+tags:
+  - name: Retry Results
+    description: Webhook endpoint for receiving payment retry outcomes
+
+paths:
+  /webhooks/retry-results:
+    post:
+      tags: [Retry Results]
+      summary: Receive retry result webhook
+      description: |
+        Butter POSTs to this endpoint after each payment retry attempt. Your endpoint
+        should return `200` to acknowledge receipt. Any non-2xx response is treated as
+        a delivery failure and will trigger retries.
+      operationId: receiveRetryResult
+      parameters:
+        - name: X-Butter-Webhook-Type
+          in: header
+          required: false
+          description: The type of webhook event.
+          schema:
+            type: string
+        - name: X-Butter-Webhook-Expiration
+          in: header
+          required: false
+          description: The Unix timestamp at which the webhook signature expires.
+          schema:
+            type: integer
+            example: 1698251668
+        - name: X-Butter-Webhook-Signature
+          in: header
+          required: false
+          description: HMAC signature used to validate that the webhook originated from Butter.
+          schema:
+            type: string
+            example: "06cf8a25ef73841fea0b20f13499f173e7767da53cccba2412b261816515f30d"
+        - name: X-Butter-Webhook-Deduplication-ID
+          in: header
+          required: false
+          description: MD5 unique identifier for deduplicating webhook deliveries.
+          schema:
+            type: string
+            example: "47bce5c74f589f4867dbd57e9ca9f808"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RetryResult"
+            examples:
+              successful_retry:
+                summary: Successful retry attempt
+                value:
+                  timestamp: "2023-10-25T03:57:26Z"
+                  butter_id: "911536259375759362"
+                  customer_id: "cust_12345"
+                  subscription_id: "sub_12345"
+                  invoice_id: "inv_12345"
+                  transaction_id: "ts_12345"
+                  original_psp_transaction_id: "9472768581"
+                  psp_transactions:
+                    - psp_transaction_id: "6386243129177352"
+                      network_transaction_id: "QKSX6RP250903"
+                      merchant_payment_method_id: "pm_12566742"
+                      success: true
+                  original_amount: 49.99
+                  amount_collected: 49.99
+                  currency: "USD"
+                  success: true
+              failed_retry:
+                summary: Failed retry attempt
+                value:
+                  timestamp: "2023-10-25T03:57:26Z"
+                  butter_id: "911536259375759363"
+                  customer_id: "cust_12345"
+                  subscription_id: "sub_12345"
+                  invoice_id: "inv_12345"
+                  transaction_id: "ts_12346"
+                  original_psp_transaction_id: "9472768581"
+                  psp_transactions:
+                    - psp_transaction_id: "6386243129177353"
+                      network_transaction_id: "QKSX6RP250904"
+                      merchant_payment_method_id: "pm_12566742"
+                      success: false
+                  original_amount: 49.99
+                  amount_collected: 49.99
+                  currency: "USD"
+                  success: false
+              reduced_amount:
+                summary: Retry with reduced amount
+                value:
+                  timestamp: "2023-10-25T03:57:26Z"
+                  butter_id: "911536259375759364"
+                  customer_id: "cust_12345"
+                  subscription_id: "sub_12345"
+                  invoice_id: "inv_12345"
+                  transaction_id: "ts_12347"
+                  original_psp_transaction_id: "9472768581"
+                  psp_transactions:
+                    - psp_transaction_id: "6386243129177354"
+                      network_transaction_id: "QKSX6RP250905"
+                      merchant_payment_method_id: "pm_12566742"
+                      success: true
+                  original_amount: 49.99
+                  amount_collected: 29.99
+                  currency: "USD"
+                  success: true
+                  custom:
+                    brand: "DTC"
+      responses:
+        "200":
+          description: Event Delivered Successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/WebhookAck"
+              example:
+                detail: "Event delivered successfully"
+        "500":
+          description: Event Not Delivered — webhooks will retry every 12 hours for 7 days
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/WebhookAck"
+              example:
+                detail: "Server is unavailable"
+
+components:
+  securitySchemes:
+    basicAuth:
+      type: http
+      scheme: basic
+      description: Basic auth credentials you (the merchant) provide to Butter to authorize webhook requests.
+    apiKeyAuth:
+      type: apiKey
+      in: header
+      name: x-api-key
+      description: API key credentials you (the merchant) provide to Butter to authorize requests.
+
+  schemas:
+    RetryResult:
+      type: object
+      description: The outcome of a retry attempt to recover a failed payment.
+      properties:
+        timestamp:
+          type: string
+          format: date-time
+          description: The time when this webhook was created and sent — not necessarily when the retry attempt occurred.
+          example: "2023-10-25T03:57:26Z"
+        butter_id:
+          type: string
+          description: The ID of the retry from Recover.
+          example: "911536259375759362"
+        customer_id:
+          type: string
+          description: The ID of the customer from the merchant's internal subscription management system.
+          example: "cust_12345"
+        subscription_id:
+          type: string
+          description: The ID of the subscription from the merchant's internal subscription management system.
+          example: "sub_12345"
+        invoice_id:
+          type: string
+          description: The ID of the invoice from the merchant's internal subscription management system.
+          example: "inv_12345"
+        transaction_id:
+          type: string
+          description: The ID of the transaction from the merchant's internal subscription management system.
+          example: "ts_12345"
+        original_psp_transaction_id:
+          type: string
+          description: The original transaction ID from the PSP passed by the merchant to the Recover Enterprise API.
+          example: "9472768581"
+        psp_transactions:
+          type: array
+          description: The IDs of the transactions created with the PSP during the retry attempt.
+          items:
+            $ref: "#/components/schemas/PspTransaction"
+        original_amount:
+          type: number
+          format: float
+          description: The original amount from the initial transaction.
+          example: 49.99
+        amount_collected:
+          type: number
+          format: float
+          description: |
+            The amount collected or attempted to be collected. This may differ from
+            `original_amount` if a different retry amount was passed in the Retry Status
+            response — most often when a merchant reduces the amount later in the dunning
+            cycle to improve recovery odds.
+          example: 49.99
+        currency:
+          type: string
+          description: The currency the retry was attempted with, in ISO 4217 format.
+          example: "USD"
+        success:
+          type: boolean
+          description: Whether the overall retry attempt was successful.
+          example: true
+        custom:
+          type: object
+          description: Any custom fields the merchant passed to the Recover Enterprise API.
+          additionalProperties: true
+          example:
+            brand: "DTC"
+
+    PspTransaction:
+      type: object
+      description: A single transaction created with the PSP during a retry attempt.
+      properties:
+        psp_transaction_id:
+          type: string
+          description: The transaction ID from the PSP.
+          example: "6386243129177352"
+        network_transaction_id:
+          type: string
+          description: The network transaction ID returned from the PSP after executing the transaction.
+          example: "QKSX6RP250903"
+        merchant_payment_method_id:
+          type: string
+          description: The ID of the payment method used for the transaction from the merchant's system.
+          example: "pm_12566742"
+        success:
+          type: boolean
+          description: Whether the individual transaction attempt was successful.
+          example: true
+
+    WebhookAck:
+      type: object
+      properties:
+        detail:
+          type: string
+          example: "Event delivered successfully"

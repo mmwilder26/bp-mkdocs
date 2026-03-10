@@ -1,0 +1,229 @@
+openapi: 3.0.3
+
+info:
+  title: Butter API
+  version: 1.0.0
+  description: |
+    ## Overview
+    The Butter API allows you to manage content, users, and webhooks.
+
+    ## Authentication
+    All requests require a Bearer token:
+    ```
+    Authorization: Bearer <your_api_key>
+    ```
+
+servers:
+  - url: https://api.butterpayments.com/v2
+    description: Production
+
+security:
+  - bearerAuth: []
+
+tags:
+  - name: Posts
+    description: Blog post operations
+  - name: Users
+    description: User management
+  - name: Webhooks
+    description: Webhook configuration
+
+paths:
+  /posts:
+    get:
+      tags: [Posts]
+      summary: List all posts
+      description: Returns a paginated list of published blog posts.
+      parameters:
+        - name: page
+          in: query
+          description: Page number
+          schema:
+            type: integer
+            default: 1
+        - name: page_size
+          in: query
+          description: Number of results per page (max 100)
+          schema:
+            type: integer
+            default: 10
+      responses:
+        "200":
+          description: A list of posts
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PostList"
+              example:
+                data:
+                  - slug: hello-world
+                    title: Hello World
+                    published: "2024-01-15T10:00:00Z"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /posts/{slug}:
+    get:
+      tags: [Posts]
+      summary: Get a post
+      description: Returns a single post by its slug.
+      parameters:
+        - name: slug
+          in: path
+          required: true
+          description: The post's unique slug
+          schema:
+            type: string
+            example: hello-world
+      responses:
+        "200":
+          description: A single post
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Post"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /users:
+    post:
+      tags: [Users]
+      summary: Create a user
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UserCreate"
+            example:
+              email: jane@example.com
+              name: Jane Doe
+      responses:
+        "201":
+          description: User created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/User"
+        "422":
+          $ref: "#/components/responses/ValidationError"
+
+  /webhooks/{id}:
+    delete:
+      tags: [Webhooks]
+      summary: Delete a webhook
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "204":
+          description: Webhook deleted
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+
+  schemas:
+    Post:
+      type: object
+      properties:
+        slug:
+          type: string
+          example: hello-world
+        title:
+          type: string
+          example: Hello World
+        body:
+          type: string
+          description: HTML content of the post
+        published:
+          type: string
+          format: date-time
+        author:
+          $ref: "#/components/schemas/User"
+
+    PostList:
+      type: object
+      properties:
+        data:
+          type: array
+          items:
+            $ref: "#/components/schemas/Post"
+        meta:
+          type: object
+          properties:
+            count:
+              type: integer
+            next_page:
+              type: integer
+              nullable: true
+
+    User:
+      type: object
+      properties:
+        id:
+          type: string
+          example: usr_abc123
+        email:
+          type: string
+          format: email
+          example: jane@example.com
+        name:
+          type: string
+          example: Jane Doe
+
+    UserCreate:
+      type: object
+      required: [email, name]
+      properties:
+        email:
+          type: string
+          format: email
+        name:
+          type: string
+
+    Error:
+      type: object
+      properties:
+        code:
+          type: string
+        message:
+          type: string
+
+  responses:
+    Unauthorized:
+      description: Missing or invalid API key
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
+          example:
+            code: unauthorized
+            message: Invalid API key
+
+    NotFound:
+      description: Resource not found
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
+          example:
+            code: not_found
+            message: The requested resource does not exist
+
+    ValidationError:
+      description: Invalid request body
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
+          example:
+            code: validation_error
+            message: email is required
