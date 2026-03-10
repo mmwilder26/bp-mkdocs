@@ -1,1 +1,1 @@
-<swagger-ui src="/openapi/payments.yaml"/>
+<swagger-ui src="./openapi/payments.yaml"/>

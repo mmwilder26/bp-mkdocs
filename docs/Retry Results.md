@@ -1,1 +1,1 @@
-<swagger-ui src="/openapi/retry-results.yaml"/>
+<swagger-ui src="./openapi/retry-results.yaml"/>
