@@ -1,0 +1,478 @@
+swagger: "2.0"
+
+info:
+  title: Butter Payments API
+  version: 1.0.0
+  description: |
+    ## Overview
+    The Payments API serves as the entry point into Recover for all transaction events
+    related to payment processing, including successful payments, failed payments, and
+    Butter retry events.
+
+    All transaction events, besides disputes, should be sent by the merchant to this endpoint.
+
+    ## Authentication
+    All requests require an API key passed as a header:
+    ```
+    x-api-key: <your_api_key>
+    ```
+
+host: api.butterpayments.com
+basePath: /recover
+schemes:
+  - https
+
+consumes:
+  - application/json
+produces:
+  - application/json
+
+securityDefinitions:
+  apiKeyAuth:
+    type: apiKey
+    in: header
+    name: x-api-key
+    description: API key to authorize requests.
+
+security:
+  - apiKeyAuth: []
+
+tags:
+  - name: Payments
+    description: Payment transaction event operations
+
+paths:
+  /payments:
+    post:
+      tags: [Payments]
+      summary: Submit payment transaction events
+      description: |
+        Accepts all transaction events related to payment processing — successful payments,
+        failed payments, and Butter retry events. If your retry strategy includes multiple
+        payment methods, list each of them in the `transactions` array rather than sending
+        a separate request per transaction.
+      operationId: submitPayment
+      parameters:
+        - in: body
+          name: body
+          required: true
+          schema:
+            $ref: "#/definitions/PaymentRequest"
+      responses:
+        200:
+          description: Request Successful
+          schema:
+            $ref: "#/definitions/Response200"
+          examples:
+            application/json:
+              message: "Request submitted for processing"
+              request_id: "2c941653-b229-4528-b576-70fcfd388543:49645839701979566120793328447151049151317978254208401410:000000000000"
+        400:
+          description: Request Failed Validation
+          schema:
+            $ref: "#/definitions/Response400"
+          examples:
+            application/json:
+              message: "Invalid request body"
+              errors:
+                - "('subscription', 'start_date')": "Field required"
+        403:
+          description: Invalid API Key
+          schema:
+            $ref: "#/definitions/Response403"
+          examples:
+            application/json:
+              message: "Forbidden"
+              errors: "Invalid API Key"
+        404:
+          description: Method/Path Not Found
+          schema:
+            $ref: "#/definitions/Response404"
+          examples:
+            application/json:
+              message: "Method/Path combination not found."
+        415:
+          description: Unsupported Media Type
+          schema:
+            $ref: "#/definitions/Response415"
+          examples:
+            application/json:
+              message: "Unsupported Media Type"
+              errors: "Content-Type must be application/json"
+        500:
+          description: Server Error
+
+definitions:
+  PaymentRequest:
+    type: object
+    required:
+      - customer
+      - subscription
+      - invoice
+      - transactions
+    properties:
+      customer:
+        $ref: "#/definitions/Customer"
+      subscription:
+        $ref: "#/definitions/Subscription"
+      invoice:
+        $ref: "#/definitions/Invoice"
+      transactions:
+        type: array
+        description: |
+          An array of transactions. At least one transaction is required. If your retry
+          strategy includes multiple payment methods, list each of them here rather than
+          sending an additional event for each transaction.
+        minItems: 1
+        items:
+          $ref: "#/definitions/Transaction"
+      custom:
+        type: object
+        description: |
+          Additional fields provided as custom metadata. May be required when additional
+          data must be included in transaction requests to your Payment Processor, or for
+          persisting certain metadata within Butter. Defined in collaboration with Butter
+          Solutions Engineers.
+    example:
+      customer:
+        id: "11223344"
+      subscription:
+        id: "sub_1234"
+        start_date: "2023-10-25T03:57:26Z"
+      invoice:
+        id: "inv_12345"
+        created_at: "2023-10-25T03:57:26Z"
+      transactions:
+        - id: "ts_12345"
+          psp_transaction_id: "ts_12345"
+          psp: "stripe"
+          acquirer_country: "US"
+          amount: 12.23
+          currency: "USD"
+          funding_source: "CREDIT"
+          outcome:
+            raw_response_message: "insufficient_funds"
+          payment_method_id: "pm_abc123"
+          psp_transaction_created_at: "2023-10-25T03:57:26Z"
+          scheme: "visa"
+          success: false
+
+  Customer:
+    type: object
+    required:
+      - id
+    description: The customer associated with the payment event.
+    properties:
+      id:
+        type: string
+        description: The internal identifier from your subscription management platform used to designate the customer.
+        example: "11223344"
+      psp_id:
+        type: string
+        description: The identifier used by the Payment Processor to designate the customer.
+        example: "cus_12345"
+      created_at:
+        type: string
+        format: date-time
+        description: The timestamp that the customer was created.
+        example: "2023-10-25T03:57:26Z"
+      postal_code:
+        type: string
+        description: The postal code from the customer's address.
+        example: "04102"
+
+  Subscription:
+    type: object
+    required:
+      - id
+      - start_date
+    description: The subscription associated with the payment event.
+    properties:
+      id:
+        type: string
+        description: The internal identifier from your subscription management platform used to designate the subscription.
+        example: "sub_1234"
+      start_date:
+        type: string
+        format: date-time
+        description: Timestamp of when the subscription started.
+        example: "2023-10-25T03:57:26Z"
+      end_date:
+        type: string
+        format: date-time
+        description: Timestamp of when the subscription ended or will end, if applicable.
+        example: "2023-10-25T03:57:26Z"
+      discounted_or_free_period:
+        type: boolean
+        description: Indicates a free trial or discounted billing period.
+        example: false
+      product_id:
+        type: string
+        description: Unique identifier of the product or plan the subscription is for.
+        example: "sku_02901"
+      billing:
+        type: object
+        properties:
+          period:
+            type: string
+            enum: [day, week, month, year]
+            description: The subscription billing period. Must be one of the specified values, or absent.
+            example: "month"
+          frequency:
+            type: integer
+            minimum: 1
+            description: The number of payments expected per billing period. Must be a positive integer, or absent.
+            example: 1
+
+  Invoice:
+    type: object
+    required:
+      - id
+      - created_at
+    description: The invoice associated with the payment event.
+    properties:
+      id:
+        type: string
+        description: The internal identifier from your subscription management platform used to designate the invoice.
+        example: "inv_12345"
+      created_at:
+        type: string
+        format: date-time
+        description: Timestamp of when the invoice was created.
+        example: "2023-10-25T03:57:26Z"
+
+  Transaction:
+    type: object
+    required:
+      - id
+      - psp_transaction_id
+      - psp
+      - acquirer_country
+      - amount
+      - currency
+      - funding_source
+      - outcome
+      - payment_method_id
+      - psp_transaction_created_at
+      - scheme
+      - success
+    properties:
+      id:
+        type: string
+        description: The internal identifier from your subscription management platform used to designate the transaction.
+        example: "ts_12345"
+      psp_transaction_id:
+        type: string
+        description: The identifier used to designate the transaction from the PSP.
+        example: "ts_12345"
+      network_transaction_id:
+        type: string
+        description: The original transaction ID from the network. Required for Worldpay integrations.
+        example: "PCQVZWBGA0912"
+      psp:
+        type: string
+        enum: [adyen, braintree, recurly, recharge, stripe, worldpay]
+        description: The name of the PSP the transaction originated on. Must be one of the specified values.
+        example: "stripe"
+      mid:
+        type: string
+        description: The MID (merchant identification number) used to process a transaction with the PSP. Required for Worldpay integrations.
+        example: "8224137"
+      reporting_group:
+        type: string
+        description: |
+          The identifier used to categorize transaction data. Commonly used for reporting
+          and analysis, identifying business units, branches, currencies, etc. PSPs may use
+          different names — for example, Worldpay uses Reporting Groups while Braintree uses
+          Merchant Account IDs (MAID).
+        example: "Pepsi"
+      acquirer_country:
+        type: string
+        description: The country in which the payment was processed and acquired.
+        example: "US"
+      amount:
+        type: number
+        format: float
+        description: The amount attempted, represented as a float.
+        example: 12.23
+      billing_postal_code:
+        type: string
+        description: The postal code from the customer's billing address.
+        example: "04102"
+      auth:
+        type: boolean
+        description: Indicates whether this is a pre-authorization or final capture.
+        example: false
+      bin:
+        type: string
+        description: The 6-digit Bank Identification Number of the payment card used.
+        example: "112233"
+      captured:
+        type: boolean
+        description: Indicates whether the payment has been captured.
+        example: false
+      currency:
+        type: string
+        description: The currency of the transaction in ISO 4217 format.
+        example: "USD"
+      funding_source:
+        type: string
+        enum: [CREDIT, DEBIT, MIXED, PAYPAL, PREPAID, UNCATEGORIZED, UNKNOWN]
+        description: The account type funding the payment card. Must be one of the specified values.
+        example: "CREDIT"
+      issuer_country:
+        type: string
+        description: The country in which the payment card was issued.
+        example: "US"
+      outcome:
+        $ref: "#/definitions/Outcome"
+      payment_method_id:
+        type: string
+        description: The ID from the PSP representing the payment method attempted.
+        example: "pm_abc123"
+      psp_transaction_created_at:
+        type: string
+        format: date-time
+        description: Timestamp of when the PSP created the transaction.
+        example: "2023-10-25T03:57:26Z"
+      refunded:
+        type: boolean
+        description: Indicates whether the payment has been refunded.
+        example: false
+      scheme:
+        type: string
+        description: Network of the payment card (e.g. visa, mastercard).
+        example: "visa"
+      success:
+        type: boolean
+        description: Indicates whether the transaction was successfully processed.
+        example: false
+      description:
+        type: string
+        description: A description of the item to show on a receipt or invoice.
+        example: "Monthly subscription"
+      statement_descriptor:
+        type: string
+        description: A short descriptor that will appear on the customer's bank statement.
+        example: "Butter* tshirt"
+      enhanced_data:
+        $ref: "#/definitions/EnhancedData"
+
+  Outcome:
+    type: object
+    required:
+      - raw_response_message
+    description: The result of the transaction attempt.
+    properties:
+      raw_response_message:
+        type: string
+        description: The issuer approval or decline message provided in the authorization response.
+        example: "insufficient_funds"
+      psp_response_message:
+        type: string
+        description: The response description provided by the Payment Processor.
+        example: "The customer has insufficient funds."
+      processor_response_code:
+        type: number
+        description: The response code returned by the Payment Processor.
+        example: 2000
+      network_status:
+        type: string
+        description: Additional network data returned by certain Payment Processors, if applicable.
+        example: "psp_block"
+      response_type:
+        type: string
+        description: Category of decline code (e.g. Soft Decline, Hard Decline).
+        example: "hard_decline"
+
+  EnhancedData:
+    type: object
+    description: Optional enhanced data fields that can be added to processing.
+    properties:
+      level_2:
+        type: object
+        description: |
+          Adds additional information beyond Level 1. Level 2 processing typically includes
+          customer code (often a purchase order number), sales tax amount, and merchant tax ID.
+          Including this data often qualifies the merchant for lower processing fees — particularly
+          beneficial for corporate or government transactions.
+        properties:
+          purchase_order_number:
+            type: string
+            description: A unique identifier for the purchase.
+            example: "2337210904"
+          total_tax_amount:
+            type: string
+            description: |
+              The amount of sales tax applied to the purchase. Note that there usually needs to
+              be a tax amount greater than zero — transactions with no sales tax may not qualify
+              for Level 2 rates.
+            example: "12.20"
+          total_discount_amount:
+            type: string
+            description: The total discount amount applied to the purchase.
+            example: "20.00"
+      level_3:
+        type: object
+        description: |
+          Provides the most detailed transaction data, extending Level 2 with line-item details
+          such as item descriptions, quantities, unit prices, and product codes. Typically used
+          for large corporate and government transactions. Can lead to lower interchange rates
+          due to reduced risk and enhanced information provided.
+        properties:
+          line_items:
+            type: array
+            description: |
+              A list of objects containing line item details required for Level 3 processing.
+              Requirements may differ between card types and PSPs — see your PSP's documentation
+              for the exact format. Recover passes these objects through to the PSP without alteration.
+            items:
+              type: object
+
+  Response200:
+    type: object
+    properties:
+      message:
+        type: string
+        example: "Request submitted for processing"
+      request_id:
+        type: string
+        example: "2c941653-b229-4528-b576-70fcfd388543:49645839701979566120793328447151049151317978254208401410:000000000000"
+
+  Response400:
+    type: object
+    properties:
+      message:
+        type: string
+        example: "Invalid request body"
+      errors:
+        type: array
+        items:
+          type: object
+
+  Response403:
+    type: object
+    properties:
+      message:
+        type: string
+        example: "Forbidden"
+      errors:
+        type: string
+        example: "Invalid API Key"
+
+  Response404:
+    type: object
+    properties:
+      message:
+        type: string
+        example: "Method/Path combination not found."
+
+  Response415:
+    type: object
+    properties:
+      message:
+        type: string
+        example: "Unsupported Media Type"
+      errors:
+        type: string
+        example: "Content-Type must be application/json"

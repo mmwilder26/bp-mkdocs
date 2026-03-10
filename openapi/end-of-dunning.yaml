@@ -1,0 +1,179 @@
+openapi: 3.0.3
+
+info:
+  title: Butter End of Dunning Webhook
+  version: 1.0.0
+  description: |
+    ## Overview
+    Butter sends webhooks via HTTP POST requests to this endpoint when dunning is
+    complete and no further attempts will be made to recover the payment.
+
+    This endpoint is **provisioned on the merchant's servers**. Butter calls it — the
+    merchant does not initiate these requests.
+
+    > **Note:** The Butter webhook payload is a flat JSON object. The payload does not
+    > contain a higher-level `body` wrapper around the attributes.
+
+    ## Delivery Guarantee
+    Butter guarantees **at-least-once** delivery of events. Use the
+    `X-Butter-Webhook-Deduplication-ID` header to detect and safely discard duplicate
+    deliveries. On failure, webhooks retry every 12 hours for 7 days.
+
+    ## Authentication
+    Provide credentials to Butter during onboarding. Butter will include them on every
+    webhook request to your endpoint.
+
+    **Basic Auth:**
+    ```
+    Authorization: Basic <base64(username:password)>
+    ```
+
+    **API Key:**
+    ```
+    x-api-key: <your_api_key>
+    ```
+
+    ## Webhook Signature Verification
+    Validate the `X-Butter-Webhook-Signature` HMAC header to confirm the request
+    originated from Butter. Check `X-Butter-Webhook-Expiration` to reject expired
+    requests.
+
+servers:
+  - url: https://api.<merchant-url>.com
+    description: Merchant-hosted server (replace with your actual domain)
+
+security:
+  - basicAuth: []
+  - apiKeyAuth: []
+
+tags:
+  - name: End of Dunning
+    description: Webhook endpoint for receiving end-of-dunning notifications
+
+paths:
+  /webhooks/end-of-dunning:
+    post:
+      tags: [End of Dunning]
+      summary: Receive end-of-dunning webhook
+      description: |
+        Butter POSTs to this endpoint when the dunning period for an invoice has elapsed
+        and no further recovery attempts will be made. Your endpoint should return `200`
+        to acknowledge receipt. Any non-2xx response is treated as a delivery failure
+        and will trigger retries.
+      operationId: receiveEndOfDunning
+      parameters:
+        - name: X-Butter-Webhook-Type
+          in: header
+          required: false
+          description: The type of webhook event.
+          schema:
+            type: string
+        - name: X-Butter-Webhook-Expiration
+          in: header
+          required: false
+          description: The Unix timestamp at which the webhook signature expires.
+          schema:
+            type: integer
+            example: 1698251668
+        - name: X-Butter-Webhook-Signature
+          in: header
+          required: false
+          description: HMAC signature used to validate that the webhook originated from Butter.
+          schema:
+            type: string
+            example: "06cf8a25ef73841fea0b20f13499f173e7767da53cccba2412b261816515f30d"
+        - name: X-Butter-Webhook-Deduplication-ID
+          in: header
+          required: false
+          description: MD5 unique identifier for deduplicating webhook deliveries.
+          schema:
+            type: string
+            example: "47bce5c74f589f4867dbd57e9ca9f808"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/EndOfDunning"
+            examples:
+              recovered:
+                summary: Invoice successfully recovered
+                value:
+                  timestamp: "2023-10-25T03:57:26Z"
+                  invoice_id: "inv_12345"
+                  recovered: true
+              not_recovered:
+                summary: Invoice not recovered — dunning window elapsed
+                value:
+                  timestamp: "2023-10-25T03:57:26Z"
+                  invoice_id: "inv_12345"
+                  recovered: false
+              with_custom:
+                summary: With custom metadata
+                value:
+                  timestamp: "2023-10-25T03:57:26Z"
+                  invoice_id: "inv_12345"
+                  recovered: false
+                  custom:
+                    brand: "DTC"
+      responses:
+        "200":
+          description: Event Delivered Successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/WebhookAck"
+              example:
+                detail: "Event delivered successfully"
+        "500":
+          description: Event Not Delivered — webhooks will retry every 12 hours for 7 days
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/WebhookAck"
+              example:
+                detail: "Server is unavailable"
+
+components:
+  securitySchemes:
+    basicAuth:
+      type: http
+      scheme: basic
+      description: Basic auth credentials you (the merchant) provide to Butter to authorize webhook requests.
+    apiKeyAuth:
+      type: apiKey
+      in: header
+      name: x-api-key
+      description: API key credentials you (the merchant) provide to Butter to authorize requests.
+
+  schemas:
+    EndOfDunning:
+      type: object
+      description: A notification that the dunning period has elapsed for the specified invoice.
+      properties:
+        timestamp:
+          type: string
+          format: date-time
+          description: The time when this webhook was created and sent — not necessarily when dunning ended.
+          example: "2023-10-25T03:57:26Z"
+        invoice_id:
+          type: string
+          description: The ID of the invoice from the merchant's internal subscription management system.
+          example: "inv_12345"
+        recovered:
+          type: boolean
+          description: Whether the invoice was successfully recovered during the dunning period.
+          example: true
+        custom:
+          type: object
+          description: Any custom fields the merchant passed in the initial failed payment POST to the Recover Enterprise API's "Send Payment Information" endpoint.
+          additionalProperties: true
+          example:
+            brand: "DTC"
+
+    WebhookAck:
+      type: object
+      properties:
+        detail:
+          type: string
+          example: "Event delivered successfully"
